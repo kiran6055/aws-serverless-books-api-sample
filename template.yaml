@@ -189,7 +189,6 @@ Resources:
       Environment:
         Variables:
           TABLE: !Ref BooksTable
-          FN_NEW_VERSION: !Ref CreateBook.Version
       Tags:
         project: my-project
         environment: !Ref ENV
@@ -207,7 +206,7 @@ Resources:
             - Effect: Allow
               Action:
                 - lambda:InvokeFunction
-              Resource: !Ref CreateBook.Version
+              Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${CreateBook}'
 
   CreateBookErrorMetricGreaterThanZeroAlarm:
     Type: AWS::CloudWatch::Alarm
