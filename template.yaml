@@ -87,8 +87,7 @@ Resources:
           Properties:
             Path: /books
             Method: get
-            RestApiId:
-              Ref: BooksApi
+            RestApiId: !Ref BooksApi
 
   CreateBook:
     Type: AWS::Serverless::Function
@@ -115,8 +114,7 @@ Resources:
           Properties:
             Path: /books
             Method: post
-            RestApiId:
-              Ref: BooksApi
+            RestApiId: !Ref BooksApi
             Auth:
               AuthorizationScopes:
                 - email
@@ -158,7 +156,7 @@ Resources:
           Required: false
 
   UserPoolClient:
-    Type: "AWS::Cognito::UserPoolClient"
+    Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref CognitoUserPool
       AllowedOAuthFlowsUserPoolClient: true
@@ -175,14 +173,14 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
         - !If
           - IsProduction
-OAOAOAOA          - !Ref 'AWS::NoValue'
-OAOA          - ALLOW_USER_PASSWORD_AUTH
-OA
-OAOA  UserPoolDomain:
-OAOAOAOA    Type: AWS::Cognito::UserPoolDomain
+          - !Ref 'AWS::NoValue'
+          - ALLOW_USER_PASSWORD_AUTH
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
     Properties:
       Domain: !Sub "book-api-${ENV}-${AWS::AccountId}"
-OA      UserPoolId: !Ref CognitoUserPool
+      UserPoolId: !Ref CognitoUserPool
 
   CreateBookPreTraffic:
     Type: AWS::Serverless::Function
@@ -202,17 +200,16 @@ Resources:
             TableName: !Ref BooksTable
         - Version: '2012-10-17'
           Statement:
-          - Effect: Allow
-            Action:
-              - codedeploy:PutLifecycleEventHookExecutionStatus
-            Resource:
-              !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
+            - Effect: Allow
+              Action:
+                - codedeploy:PutLifecycleEventHookExecutionStatus
+              Resource: !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
         - Version: '2012-10-17'
           Statement:
-          - Effect: Allow
-            Action:
-              - lambda:InvokeFunction
-            Resource: !Ref CreateBook.Version
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !Ref CreateBook.Version
 
   CreateBookAliasErrorMetricGreaterThanZeroAlarm:
     Type: AWS::CloudWatch::Alarm
