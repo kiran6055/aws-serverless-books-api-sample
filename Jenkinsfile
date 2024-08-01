@@ -17,7 +17,7 @@ pipeline {
             steps {
                 script {
                     cleanWs()
-                    git credentialsId: 'kiranterraform', url: 'https://bitbucket.org/your-username/your-repository.git', branch: "${params.BRANCH}"
+                    git credentialsId: 'kiranterraform', url: 'https://github.com/kiran6055/aws-serverless-books-api-sample.git', branch: "${params.BRANCH}"
                 }
             }
         }
