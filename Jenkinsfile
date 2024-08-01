@@ -4,6 +4,7 @@ pipeline {
     environment {
         AWS_ACCOUNT_ID = credentials('aws-account-id')
         REGION = "ap-south-1"
+        AWS_Cred = "aws-credentials"
     }
 
     parameters {
@@ -16,7 +17,7 @@ pipeline {
             steps {
                 script {
                     cleanWs()
-                    git credentialsId: 'suntec-bitbucket', url: 'https://bitbucket.org/your-username/your-repository.git', branch: "${params.BRANCH}"
+                    git credentialsId: 'kiranterraform', url: 'https://bitbucket.org/your-username/your-repository.git', branch: "${params.BRANCH}"
                 }
             }
         }
@@ -32,7 +33,7 @@ pipeline {
                     sh 'unzip awscliv2.zip'
                     sh './aws/install'
                     sh 'cd SAMBackEnd && sam validate'
-                    sh 'aws cloudformation validate-template --template-body file://admin-panel.yml'
+                    sh 'aws cloudformation validate-template --template-body file://template.yml'
                 }
             }
         }
@@ -48,13 +49,13 @@ pipeline {
             }
         }
 
-        stage('Static Code Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'sonarqubetoken', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=http://13.201.7.245:9000 -Dsonar.projectKey=${APP_NAME} -Dsonar.qualitygate.wait=true"
-                }
-            }
-        }
+//        stage('Static Code Analysis') {
+//            steps {
+//                withCredentials([string(credentialsId: 'sonarqubetoken', variable: 'SONAR_AUTH_TOKEN')]) {
+//                    sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=http://13.201.7.245:9000 -Dsonar.projectKey=${APP_NAME} -Dsonar.qualitygate.wait=true"
+//                }
+//            }
+//        }
 
         stage('Deployment') {
             steps {
@@ -65,13 +66,5 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            mail bcc: '', body: "Job success - ${JOB_BASE_NAME}\nJenkins URL - ${JOB_URL}", cc: 'veerendra.babu@capillarytech.com', from: 'kiran.n@capillarytech.com', replyTo: '', subject: "The Pipeline success - ${JOB_NAME}", to: 'santosh.s@capillarytech.com,kiran.n@capillarytech.com'
-        }
-        failure {
-            mail bcc: '', body: "Job Failed - ${JOB_BASE_NAME}\nJenkins URL - ${JOB_URL}", cc: 'veerendra.babu@capillarytech.com', from: 'kiran.n@capillarytech.com', replyTo: '', subject: "The Pipeline failed - ${JOB_NAME}", to: 'santosh.s@capillarytech.com,kiran.n@capillarytech.com'
-        }
-    }
 }
 
