@@ -1,19 +1,17 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Parameters:
-  Stage:
+  ENV:
     Type: String
-    Description: Stage to deploy resources to
+    Description: Environment to deploy resources to
     AllowedValues:
-      - staging
-      - production
+      - dev
+      - prod
+      - uat
 
 Conditions:
-  IsProduction: !Equals [ !Ref Stage, production ]
+  IsProduction: !Equals [ !Ref ENV, prod ]
 
 Globals:
   Api:
@@ -25,7 +23,7 @@ Globals:
     Tracing: Active
     Tags:
       project: my-project
-      environment: !Ref Stage
+      environment: !Ref ENV
 
 Resources:
 
@@ -33,7 +31,7 @@ Resources:
     Type: "AWS::ApiGateway::Account"
     Properties:
       CloudWatchRoleArn: !GetAtt "ApiGatewayLoggingRole.Arn"
-      
+
   ApiGatewayLoggingRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -48,33 +46,33 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-        
+
   BooksApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub "books-api-${Stage}"
-      StageName: !Ref Stage
+      Name: !Sub "books-api-${ENV}"
+      StageName: !Ref ENV
       MethodSettings:
         - LoggingLevel: INFO
           ResourcePath: '/*' # allows for logging on any resource
           HttpMethod: '*' # allows for logging on any method
       TracingEnabled: true
       Variables:
-        LAMBDA_ALIAS: !Ref Stage
+        LAMBDA_ALIAS: !Ref ENV
       Auth:
         Authorizers:
           CognitoAuth:
             UserPoolArn: !GetAtt CognitoUserPool.Arn
-  
+
   GetAllBooks:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${Stage}-books-get-all'
+      FunctionName: !Sub '${ENV}-books-get-all'
       CodeUri: ./src/books/get-all/
       Handler: index.handler
-      AutoPublishAlias: !Ref Stage
+      AutoPublishAlias: !Sub '${ENV}-alias'  # Explicit string for alias
       DeploymentPreference:
-        Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]        
+        Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Alarms:
           - !Ref GetAllBooksAliasErrorMetricGreaterThanZeroAlarm
       Environment:
@@ -91,14 +89,14 @@ Resources:
             Method: get
             RestApiId:
               Ref: BooksApi
-  
+
   CreateBook:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${Stage}-books-create'
+      FunctionName: !Sub '${ENV}-books-create'
       CodeUri: ./src/books/create/
       Handler: index.handler
-      AutoPublishAlias: !Ref Stage
+      AutoPublishAlias: !Sub '${ENV}-alias'  # Explicit string for alias
       DeploymentPreference:
         Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Hooks:
@@ -134,17 +132,17 @@ Resources:
       PrimaryKey:
         Name: isbn
         Type: String
-      TableName: !Sub '${Stage}-books'
+      TableName: !Sub '${ENV}-books'
       Tags:
         project: my-project
-        environment: !Ref Stage
+        environment: !Ref ENV
       SSESpecification:
         SSEEnabled: true
 
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "${Stage}-books-api-user-pool"
+      UserPoolName: !Sub "${ENV}-books-api-user-pool"
       Policies:
         PasswordPolicy:
           MinimumLength: 6
@@ -174,22 +172,22 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
       ExplicitAuthFlows:
-        - ALLOW_REFRESH_TOKEN_AUTH 
+        - ALLOW_REFRESH_TOKEN_AUTH
         - !If
           - IsProduction
-          - !Ref 'AWS::NoValue'
-          - ALLOW_USER_PASSWORD_AUTH
-
-  UserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties: 
-      Domain: !Sub "book-api-${Stage}-${AWS::AccountId}"
-      UserPoolId: !Ref CognitoUserPool
+OAOAOAOA          - !Ref 'AWS::NoValue'
+OAOA          - ALLOW_USER_PASSWORD_AUTH
+OA
+OAOA  UserPoolDomain:
+OAOAOAOA    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "book-api-${ENV}-${AWS::AccountId}"
+OA      UserPoolId: !Ref CognitoUserPool
 
   CreateBookPreTraffic:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${Stage}-books-create-pre-traffic-check'
+      FunctionName: !Sub '${ENV}-books-create-pre-traffic-check'
       CodeUri: ./src/books/create-pre-traffic/
       Handler: index.handler
       Environment:
@@ -198,7 +196,7 @@ Resources:
           FN_NEW_VERSION: !Ref CreateBook.Version
       Tags:
         project: my-project
-        environment: !Ref Stage
+        environment: !Ref ENV
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref BooksTable
@@ -223,9 +221,9 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Resource
-          Value: !Sub '${GetAllBooks}:${Stage}'
+          Value: !Sub '${CreateBook}:${ENV}'
         - Name: FunctionName
-          Value: !Ref GetAllBooks
+          Value: !Ref CreateBook
       EvaluationPeriods: 2
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -240,9 +238,9 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Resource
-          Value: !Sub '${CreateBook}:${Stage}'
+          Value: !Sub '${GetAllBooks}:${ENV}'
         - Name: FunctionName
-          Value: !Ref CreateBook
+          Value: !Ref GetAllBooks
       EvaluationPeriods: 2
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -253,7 +251,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: "API endpoint"
-    Value: !Sub "https://${BooksApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+    Value: !Sub "https://${BooksApi}.execute-api.${AWS::Region}.amazonaws.com/${ENV}/"
   UserPoolId:
     Description: "User Pool Id"
     Value: !Ref CognitoUserPool
@@ -263,3 +261,4 @@ Outputs:
   BooksTable:
     Description: "DynamoDB table where we will be storing books"
     Value: !Ref BooksTable
+
