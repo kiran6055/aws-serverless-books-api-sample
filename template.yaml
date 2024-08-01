@@ -58,7 +58,7 @@ Resources:
           HttpMethod: '*' # allows for logging on any method
       TracingEnabled: true
       Variables:
-        LAMBDA_ALIAS: !Ref ENV
+        LAMBDA_VERSION: !Ref AWS::Lambda::Function.Version
       Auth:
         Authorizers:
           CognitoAuth:
@@ -70,11 +70,10 @@ Resources:
       FunctionName: !Sub '${ENV}-books-get-all'
       CodeUri: ./src/books/get-all/
       Handler: index.handler
-      AutoPublishAlias: !Sub '${ENV}-alias'  # Explicit string for alias
       DeploymentPreference:
         Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Alarms:
-          - !Ref GetAllBooksAliasErrorMetricGreaterThanZeroAlarm
+          - !Ref GetAllBooksErrorMetricGreaterThanZeroAlarm
       Environment:
         Variables:
           TABLE: !Ref BooksTable
@@ -95,13 +94,12 @@ Resources:
       FunctionName: !Sub '${ENV}-books-create'
       CodeUri: ./src/books/create/
       Handler: index.handler
-      AutoPublishAlias: !Sub '${ENV}-alias'  # Explicit string for alias
       DeploymentPreference:
         Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Hooks:
           PreTraffic: !Ref CreateBookPreTraffic
         Alarms:
-          - !Ref CreateBookAliasErrorMetricGreaterThanZeroAlarm
+          - !Ref CreateBookErrorMetricGreaterThanZeroAlarm
       Environment:
         Variables:
           TABLE: !Ref BooksTable
@@ -211,7 +209,7 @@ Resources:
                 - lambda:InvokeFunction
               Resource: !Ref CreateBook.Version
 
-  CreateBookAliasErrorMetricGreaterThanZeroAlarm:
+  CreateBookErrorMetricGreaterThanZeroAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Lambda Function Error > 0
@@ -228,7 +226,7 @@ Resources:
       Statistic: Sum
       Threshold: 0
 
-  GetAllBooksAliasErrorMetricGreaterThanZeroAlarm:
+  GetAllBooksErrorMetricGreaterThanZeroAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Lambda Function Error > 0
