@@ -25,15 +25,51 @@ Globals:
       environment: !Ref Stage
 
 Resources:
-  # Your other resources here
 
+  ApiGwAccountConfig:
+    Type: "AWS::ApiGateway::Account"
+    Properties:
+      CloudWatchRoleArn: !GetAtt "ApiGatewayLoggingRole.Arn"
+      
+  ApiGatewayLoggingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        
+  BooksApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "books-api-${Stage}"
+      StageName: !Ref Stage
+      MethodSettings:
+        - LoggingLevel: INFO
+          ResourcePath: '/*' # allows for logging on any resource
+          HttpMethod: '*' # allows for logging on any method
+      TracingEnabled: true
+      Variables:
+        LAMBDA_ALIAS: !Ref Stage
+      Auth:
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+  
   GetAllBooks:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${Stage}-books-get-all'
       CodeUri: ./src/books/get-all/
       Handler: index.handler
-      AutoPublishAlias: !Ref Stage
+      AutoPublishAlias: !Sub '${Stage}-alias'  # Explicit string for alias
       DeploymentPreference:
         Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Alarms:
@@ -52,14 +88,14 @@ Resources:
             Method: get
             RestApiId:
               Ref: BooksApi
-
+  
   CreateBook:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${Stage}-books-create'
       CodeUri: ./src/books/create/
       Handler: index.handler
-      AutoPublishAlias: !Ref Stage
+      AutoPublishAlias: !Sub '${Stage}-alias'  # Explicit string for alias
       DeploymentPreference:
         Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Hooks:
@@ -89,8 +125,110 @@ Resources:
                   - aws.cognito.signin.user.admin
               Authorizer: CognitoAuth
 
-  # Your other resources here
+  BooksTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: isbn
+        Type: String
+      TableName: !Sub '${Stage}-books'
+      Tags:
+        project: my-project
+        environment: !Ref Stage
+      SSESpecification:
+        SSEEnabled: true
 
+  CognitoUserPool:
+OAOAOAOAOAOAOAOAOA    Type: AWS::Cognito::UserPool
+OAOAOAOA    Properties:
+OAOAOAOA      UserPoolName: !Sub "${Stage}-books-api-user-pool"
+OAOAOAOAOAOAOAOAOAOAOA      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: false
+OAOAOAOAOAOAOA          RequireNumbers: true
+          RequireSymbols: false
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA          RequireUppercase: false
+      UsernameAttributes:
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA        - email
+      Schema:
+        - AttributeDataType: String
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA          Name: email
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA          Required: false
+
+OAOAOAOAOAOA  UserPoolClient:
+    Type: "AWS::Cognito::UserPoolClient"
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA    Properties:
+OAOAOAOAOAOAOAOAOAOAOAOAOAOA      UserPoolId: !Ref CognitoUserPool
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+OAOA        - implicit
+      AllowedOAuthScopes:
+OAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOA        - email
+OAOAOAOA        - openid
+      CallbackURLs:
+OA        - https://aws.amazon.com/
+      SupportedIdentityProviders:
+OA        - COGNITO
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH 
+        - !If
+          - IsProduction
+          - !Ref 'AWS::NoValue'
+          - ALLOW_USER_PASSWORD_AUTH
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties: 
+      Domain: !Sub "book-api-${Stage}-${AWS::AccountId}"
+      UserPoolId: !Ref CognitoUserPool
+
+  CreateBookPreTraffic:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${Stage}-books-create-pre-traffic-check'
+      CodeUri: ./src/books/create-pre-traffic/
+      Handler: index.handler
+      Environment:
+        Variables:
+          TABLE: !Ref BooksTable
+          FN_NEW_VERSION: !Ref CreateBook.Version
+      Tags:
+        project: my-project
+        environment: !Ref Stage
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BooksTable
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - codedeploy:PutLifecycleEventHookExecutionStatus
+            Resource:
+              !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: !Ref CreateBook.Version
+
+  CreateBookAliasErrorMetricGreaterThanZeroAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda Function Error > 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Resource
+          Value: !Sub '${GetAllBooks}:${Stage}'
+        - Name: FunctionName
+          Value: !Ref GetAllBooks
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
 Outputs:
   ApiEndpoint:
     Description: "API endpoint"
