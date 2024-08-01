@@ -1,8 +1,3 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
-
-
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
@@ -30,44 +25,8 @@ Globals:
       environment: !Ref Stage
 
 Resources:
+  # Your other resources here
 
-  ApiGwAccountConfig:
-    Type: "AWS::ApiGateway::Account"
-    Properties:
-      CloudWatchRoleArn: !GetAtt "ApiGatewayLoggingRole.Arn"
-      
-  ApiGatewayLoggingRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - "apigateway.amazonaws.com"
-            Action: "sts:AssumeRole"
-      Path: "/"
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-        
-  BooksApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub "books-api-${Stage}"
-      StageName: !Ref Stage
-      MethodSettings:
-        - LoggingLevel: INFO
-          ResourcePath: '/*' # allows for logging on any resource
-          HttpMethod: '*' # allows for logging on any method
-      TracingEnabled: true
-      Variables:
-        LAMBDA_ALIAS: !Ref Stage
-      Auth:
-        Authorizers:
-          CognitoAuth:
-            UserPoolArn: !GetAtt CognitoUserPool.Arn
-  
   GetAllBooks:
     Type: AWS::Serverless::Function
     Properties:
@@ -76,7 +35,7 @@ Resources:
       Handler: index.handler
       AutoPublishAlias: !Ref Stage
       DeploymentPreference:
-        Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]        
+        Type: !If [IsProduction, Linear10PercentEvery1Minute, AllAtOnce]
         Alarms:
           - !Ref GetAllBooksAliasErrorMetricGreaterThanZeroAlarm
       Environment:
@@ -93,7 +52,7 @@ Resources:
             Method: get
             RestApiId:
               Ref: BooksApi
-  
+
   CreateBook:
     Type: AWS::Serverless::Function
     Properties:
@@ -130,127 +89,7 @@ Resources:
                   - aws.cognito.signin.user.admin
               Authorizer: CognitoAuth
 
-  BooksTable:
-    Type: AWS::Serverless::SimpleTable
-    Properties:
-      PrimaryKey:
-        Name: isbn
-        Type: String
-      TableName: !Sub '${Stage}-books'
-      Tags:
-        project: my-project
-        environment: !Ref Stage
-      SSESpecification:
-        SSEEnabled: true
-
-  CognitoUserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName: !Sub "${Stage}-books-api-user-pool"
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 6
-          RequireLowercase: false
-          RequireNumbers: true
-          RequireSymbols: false
-          RequireUppercase: false
-      UsernameAttributes:
-        - email
-      Schema:
-        - AttributeDataType: String
-          Name: email
-          Required: false
-
-  UserPoolClient:
-    Type: "AWS::Cognito::UserPoolClient"
-    Properties:
-      UserPoolId: !Ref CognitoUserPool
-      AllowedOAuthFlowsUserPoolClient: true
-      AllowedOAuthFlows:
-        - implicit
-      AllowedOAuthScopes:
-        - email
-        - openid
-      CallbackURLs:
-        - https://aws.amazon.com/
-      SupportedIdentityProviders:
-        - COGNITO
-      ExplicitAuthFlows:
-        - ALLOW_REFRESH_TOKEN_AUTH 
-        - !If
-          - IsProduction
-          - !Ref 'AWS::NoValue'
-          - ALLOW_USER_PASSWORD_AUTH
-
-  UserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties: 
-      Domain: !Sub "book-api-${Stage}-${AWS::AccountId}"
-      UserPoolId: !Ref CognitoUserPool
-
-  CreateBookPreTraffic:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${Stage}-books-create-pre-traffic-check'
-      CodeUri: ./src/books/create-pre-traffic/
-      Handler: index.handler
-      Environment:
-        Variables:
-          TABLE: !Ref BooksTable
-          FN_NEW_VERSION: !Ref CreateBook.Version
-      Tags:
-        project: my-project
-        environment: !Ref Stage
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref BooksTable
-        - Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-              - codedeploy:PutLifecycleEventHookExecutionStatus
-            Resource:
-              !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
-        - Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-              - lambda:InvokeFunction
-            Resource: !Ref CreateBook.Version
-
-  CreateBookAliasErrorMetricGreaterThanZeroAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Lambda Function Error > 0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: Resource
-          Value: !Sub '${GetAllBooks}:${Stage}'
-        - Name: FunctionName
-          Value: !Ref GetAllBooks
-      EvaluationPeriods: 2
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 0
-
-  GetAllBooksAliasErrorMetricGreaterThanZeroAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Lambda Function Error > 0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: Resource
-          Value: !Sub '${CreateBook}:${Stage}'
-        - Name: FunctionName
-          Value: !Ref CreateBook
-      EvaluationPeriods: 2
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 0
+  # Your other resources here
 
 Outputs:
   ApiEndpoint:
@@ -265,3 +104,4 @@ Outputs:
   BooksTable:
     Description: "DynamoDB table where we will be storing books"
     Value: !Ref BooksTable
+
