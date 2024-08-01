@@ -9,7 +9,7 @@ pipeline {
 
     parameters {
         choice(name: 'ENV', choices: ['dev', 'prod', 'uat'], description: 'Select the environment you want to apply')
-        choice(name: 'BRANCH', choices: ['master', 'dev', 'uat'], description: 'Select the branch to apply')
+        choice(name: 'BRANCH', choices: ['main', 'dev', 'uat'], description: 'Select the branch to apply')
     }
 
     stages {
