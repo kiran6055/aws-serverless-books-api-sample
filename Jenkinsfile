@@ -25,7 +25,7 @@ pipeline {
         stage('Validation Template') {
             steps {
                 script {
-                    sh 'cd SAMBackEnd && sam validate'
+                    sh 'cd SAMBackEnd && sam validate --region $REGION'
                     sh 'aws cloudformation validate-template --template-body file://template.yml'
                 }
             }
