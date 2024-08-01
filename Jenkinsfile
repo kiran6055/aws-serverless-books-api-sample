@@ -25,13 +25,6 @@ pipeline {
         stage('Validation Template') {
             steps {
                 script {
-                    sh 'curl -L -o aws-sam-cli-linux-x86_64.zip https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip'
-                    sh 'unzip aws-sam-cli-linux-x86_64.zip -d sam-installation'
-                    sh 'sudo ./sam-installation/install --update'
-                    sh 'sam --version'
-                    sh 'curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"'
-                    sh 'unzip awscliv2.zip'
-                    sh './aws/install'
                     sh 'cd SAMBackEnd && sam validate'
                     sh 'aws cloudformation validate-template --template-body file://template.yml'
                 }
